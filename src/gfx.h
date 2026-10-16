@@ -48,6 +48,7 @@ void gfx_glow(float cx, float cy, float radius, int r, int g, int b, int a);   /
 
 /* size is in game units (1920x1080 space). y is the top of the line box. */
 int  gfx_text_w(const char *s, float size);
+void gfx_text_centered(int cx, int cy, float size, const char *s, int r, int g, int b, int a);
 void gfx_text(int x, int y, float size, const char *s, int r, int g, int b, int a, int align);
 void gfx_text_shadow(int x, int y, float size, const char *s, int r, int g, int b, int a, int align);
 int  gfx_text_h(float size);

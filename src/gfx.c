@@ -470,3 +470,36 @@ void gfx_text_shadow(int x, int y, float size, const char *s, int r, int g, int 
     }
     gfx_text(x, y, size, s, r, g, b, a, align);
 }
+
+/* Draws one line of text so that the middle of its visible pixels (not its line box) sits on (cx, cy). The ink bounds
+   are measured from the atlas itself, so it stays centred for any font set or size. */
+void gfx_text_centered(int cx, int cy, float size, const char *s, int r, int g, int b, int a) {
+    if (!s || !*s) return;
+    int k = pick(size);
+    const FontAtlas *F = &FONTS[k];
+    float rt = ratio_for(size, k);
+    if (fabsf(rt - 1.0f) < 0.04f) rt = 1.0f;
+    float pen = 0, left = 1e9f, right = -1e9f; int top = 1 << 30, bot = -1;
+    for (const char *q = s; *q; q++) {
+        int i = cidx(F, (unsigned char)*q);
+        if (i != 0) {
+            const u8 *src = F->pix + (size_t)(i / F->cols) * F->cell_h * F->atlas_w + (size_t)(i % F->cols) * F->cell_w;
+            int x0 = F->cell_w, x1 = -1, y0 = F->cell_h, y1 = -1;
+            for (int y = 0; y < F->cell_h; y++) for (int x = 0; x < F->cell_w; x++)
+                if (src[(size_t)y * F->atlas_w + x] > 64) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            if (x1 >= 0) {
+                float l = pen + (float)(x0 - F->pad) * rt, rr = pen + (float)(x1 + 1 - F->pad) * rt;
+                if (l < left) left = l;
+                if (rr > right) right = rr;
+                if (y0 < top) top = y0;
+                if (y1 > bot) bot = y1;
+            }
+        }
+        pen += F->adv[i] * rt;
+    }
+    if (bot < 0) return;
+    float mid_x = (left + right) * 0.5f;                       /* canvas pixels from the pen start */
+    float mid_y = ((float)top + (float)(bot + 1)) * 0.5f * rt;  /* canvas pixels from the top of the cell */
+    gfx_text((int)((float)cx - mid_x * (float)g_div + 0.5f), (int)((float)cy - mid_y * (float)g_div + 0.5f),
+             size, s, r, g, b, a, AL_LEFT);
+}

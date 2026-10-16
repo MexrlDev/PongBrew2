@@ -560,7 +560,7 @@ static void update_live(void) {
         if (--pu.life <= 0) pu.on = 0;
         else for (int k = 0; k < MAXB; k++) if (B[k].on) {
             float dx = B[k].x - pu.x, dy = B[k].y - (pu.y + sinf(g_tick * 0.1f) * 6);
-            if (dx * dx + dy * dy < (BR + 34) * (BR + 34)) {
+            if (dx * dx + dy * dy < (BR + 38) * (BR + 38)) {
                 burst(pu.x, pu.y, 26, 7, PU_COL[pu.type][0], PU_COL[pu.type][1], PU_COL[pu.type][2], 7, 40);
                 apply_pickup(pu.type, B[k].owner);
                 pu.on = 0;
@@ -971,10 +971,10 @@ static void draw_pickup(void) {
     if (pu.life < 120 && (pu.life / 8) % 2) return;
     float bob = sinf(g_tick * 0.1f) * 6;
     const int *c = PU_COL[pu.type];
-    gfx_glow(pu.x, pu.y + bob, 90, c[0], c[1], c[2], 150);
-    gfx_circle(pu.x, pu.y + bob, 36, c[0], c[1], c[2], 255);
-    gfx_circle(pu.x, pu.y + bob, 29, 8, 12, 34, 235);
-    gfx_text((int)pu.x - 1, (int)(pu.y + bob) - 32, 40, PU_LABEL[pu.type], c[0], c[1], c[2], 255, AL_CENTER);
+    gfx_glow(pu.x, pu.y + bob, 96, c[0], c[1], c[2], 150);
+    gfx_circle(pu.x, pu.y + bob, 40, c[0], c[1], c[2], 255);
+    gfx_circle(pu.x, pu.y + bob, 33, 8, 12, 34, 235);
+    gfx_text_centered((int)pu.x, (int)(pu.y + bob), 34, PU_LABEL[pu.type], c[0], c[1], c[2], 255);
 }
 
 static void draw_hud(void) {
