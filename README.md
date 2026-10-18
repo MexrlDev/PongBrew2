@@ -1,4 +1,4 @@
-# PONG 2 (PongBrew 2) for PS4 homebrew
+# PONG 2 (PongBrew 2) for PS4
 
 A complete Pong game for jailbroken PS4 consoles, built with the [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain)
 toolchain. Created by **MexrlDev**.
