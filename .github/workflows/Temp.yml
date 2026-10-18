@@ -1,0 +1,26 @@
+
+name: Download Font Data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  download-font:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download font_data.h
+        run: |
+          mkdir -p src
+          curl -fL \
+            "https://github.com/MexrlDev/PongBrew2/releases/latest/download/font_data.h" \
+            -o src/font_data.h
+
+      - name: Verify download
+        run: test -s src/font_data.h
