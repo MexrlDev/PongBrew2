@@ -16,81 +16,82 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
 
-      - name: Configure Git
-        run: |
-          git config user.name "MexrlDev"
-          git config user.email "82407748+MexrlDev@users.noreply.github.com"
-
-      - name: Back up main on GitHub
+      - name: Back up main and rewrite the bot commit
+        shell: bash
+        env:
+          GIT_AUTHOR_EMAIL: 82407748+MexrlDev@users.noreply.github.com
         run: |
           set -euo pipefail
+
+          git config user.name "MexrlDev"
+          git config user.email "$GIT_AUTHOR_EMAIL"
 
           git fetch origin main
 
-          git branch backup-before-author-fix origin/main
+          # Find exactly the intended bot commit.
+          mapfile -t MATCHES < <(
+            git log origin/main \
+              --format='%H%x09%an%x09%s' |
+            awk -F '\t' \
+              '$2 == "github-actions[bot]" &&
+               $3 == "Update src/font_data.h from release" {
+                print $1
+              }'
+          )
 
+          if [ "${#MATCHES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one matching bot commit; found ${#MATCHES[@]}."
+            exit 1
+          fi
+
+          OLD_COMMIT="${MATCHES[0]}"
+          echo "Target commit: $OLD_COMMIT"
+
+          # Preserve the original history on GitHub.
+          BACKUP="backup-before-author-fix-${GITHUB_RUN_ID}"
+
+          git branch "$BACKUP" origin/main
           git push origin \
-            backup-before-author-fix:refs/heads/backup-before-author-fix
+            "refs/heads/$BACKUP:refs/heads/$BACKUP"
 
-      - name: Rewrite only the bot-authored commit
-        run: |
-          set -euo pipefail
+          # Work on a local main branch.
+          git switch -C main origin/main
 
-          python3 <<'PY'
-          import os
-          import subprocess
+          # Rewrite authorship without changing file contents.
+          export TARGET_COMMIT="$OLD_COMMIT"
 
-          commits = subprocess.check_output([
-              "git", "log", "origin/main",
-              "--format=%H%x09%an%x09%ae%x09%s"
-          ], text=True).splitlines()
+          git filter-branch --force \
+            --env-filter '
+              if [ "$GIT_COMMIT" = "$TARGET_COMMIT" ]; then
+                export GIT_AUTHOR_NAME="MexrlDev"
+                export GIT_AUTHOR_EMAIL="82407748+MexrlDev@users.noreply.github.com"
+                export GIT_COMMITTER_NAME="MexrlDev"
+                export GIT_COMMITTER_EMAIL="82407748+MexrlDev@users.noreply.github.com"
+              fi
+            ' main
 
-          matches = [
-              line.split("\t", 3)
-              for line in commits
-              if len(line.split("\t", 3)) == 4
-              and line.split("\t", 3)[1] == "github-actions[bot]"
-              and line.split("\t", 3)[3] == "Update src/font_data.h from release"
-          ]
+          # Confirm the target commit no longer has the bot as author.
+          NEW_COMMIT=$(git log main \
+            --format='%H%x09%an%x09%s' |
+            awk -F '\t' \
+              '$2 == "MexrlDev" &&
+               $3 == "Update src/font_data.h from release" {
+                print $1
+                exit
+              }')
 
-          if len(matches) != 1:
-              raise SystemExit(
-                  f"Expected exactly one matching bot commit; found {len(matches)}."
-              )
+          if [ -z "$NEW_COMMIT" ]; then
+            echo "::error::Could not verify the rewritten commit."
+            exit 1
+          fi
 
-          old_hash = matches[0][0]
+          echo "Rewritten commit: $NEW_COMMIT"
 
-          subprocess.run([
-              "git", "replace", "--graft", old_hash,
-              *subprocess.check_output(
-                  ["git", "rev-list", "--parents", "-n", "1", old_hash],
-                  text=True
-              ).split()[1:]
-          ], check=True)
+          # Push only if main has not changed since checkout.
+          git push \
+            --force-with-lease="refs/heads/main:$(git rev-parse origin/main)" \
+            origin main:main
 
-          env = os.environ.copy()
-          env["FILTER_BRANCH_SQUELCH_WARNING"] = "1"
-
-          subprocess.run([
-              "git", "filter-branch", "--force",
-              "--env-filter",
-              'if [ "$GIT_COMMIT" = "' + old_hash + '" ]; then '
-              'export GIT_AUTHOR_NAME="MexrlDev"; '
-              'export GIT_AUTHOR_EMAIL="82407748+MexrlDev@users.noreply.github.com"; '
-              'export GIT_COMMITTER_NAME="MexrlDev"; '
-              'export GIT_COMMITTER_EMAIL="82407748+MexrlDev@users.noreply.github.com"; '
-              'fi',
-              "origin/main"
-          ], env=env, check=True)
-
-          new_hash = subprocess.check_output([
-              "git", "rev-parse", "refs/original/refs/remotes/origin/main"
-          ], text=True).strip()
-
-          subprocess.run([
-              "git", "push", "--force-with-lease",
-              "origin", f"{new_hash}:refs/heads/main"
-          ], check=True)
-          PY
+          echo "Successfully updated main."
+          echo "Backup branch: $BACKUP"
