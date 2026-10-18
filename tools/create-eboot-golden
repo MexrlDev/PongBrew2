@@ -1,0 +1,23 @@
+#!/bin/sh
+# Wraps the real create-fself and refuses to continue unless eboot.bin is a SELF.
+# Usage: create-eboot-golden <in.elf> <eboot.bin>
+export OO_PS4_TOOLCHAIN="${OO_PS4_TOOLCHAIN:-/usr/lib/OpenOrbisSDK}"
+FS="$(dirname "$0")/create-fself"
+IN="$1"
+OUT="$2"
+TMP="${OUT}.oelf"
+rm -f "$TMP" "$OUT"
+"$FS" -in="$IN" -eboot="$OUT" -out="$TMP" -paid=0x3800000000000011 -ptype=fake
+rc=$?
+rm -f "$TMP"
+if [ $rc -ne 0 ] || [ ! -s "$OUT" ]; then
+  echo "create-fself failed (rc=$rc)" >&2
+  exit 1
+fi
+MAGIC="$(od -An -tx1 -N4 "$OUT" | tr -d ' \n')"
+echo "[create-eboot-golden] eboot.bin magic: $MAGIC"
+if [ "$MAGIC" != "4f153d1d" ]; then
+  echo "ERROR: eboot.bin is not a SELF (expected 4f153d1d). Use the real create-fself, not create-eboot." >&2
+  rm -f "$OUT"
+  exit 1
+fi
