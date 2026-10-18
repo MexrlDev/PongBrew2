@@ -152,7 +152,7 @@ void audio_sfx(int id) { audio_sfx_pitch(id, 0); }
 void audio_sfx_pitch(int id, int semitones) {
     int h = LD(&q_head);
     int next = (h + 1) % QN;
-    if (next == LD(&q_tail)) return;      /* queue full, drop */
+    if (next == LD(&q_tail)) return;      /* queue full, drop. */
     q_id[h] = id; q_st[h] = semitones;
     ST(&q_head, next);
 }
