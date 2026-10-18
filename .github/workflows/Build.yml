@@ -1,0 +1,74 @@
+name: Build PKG
+
+on:
+  workflow_dispatch:
+    inputs:
+      resolution:
+        description: "Canvas size"
+        type: choice
+        default: hd
+        options:
+          - hd   # native 1920x1080 (60 fps in boost mode, 30 fps in normal mode)
+          - sd   # 960x540 doubled to 1080p (60 fps in both modes)
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- generate the assets that are not committed (font atlases, backgrounds, songs) ----
+      - name: Install asset tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3-pip curl
+          pip3 install pillow numpy
+
+      - name: Download Poppins Bold (SIL Open Font License)
+        run: |
+          curl -fL -o tools/Poppins-Bold.ttf \
+            https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf
+          test "$(stat -c %s tools/Poppins-Bold.ttf)" -gt 100000
+
+      - name: Generate assets
+        run: |
+          chmod +x tools/*
+          python3 tools/gen_assets.py
+          ls -la assets sce_sys src
+
+      # ---- build inside the OpenOrbis toolchain image ----
+      - name: Build PKG in the OpenOrbis container
+        env:
+          SD_FLAG: ${{ inputs.resolution == 'sd' && 'SD=1' || '' }}
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --entrypoint /bin/sh \
+            -e SD_FLAG="$SD_FLAG" openorbisofficial/toolchain:latest -c '
+              set -e
+              apk add --no-cache python3 make >/dev/null 2>&1 || true
+              chmod +x tools/*
+              sh tools/build-create-fself.sh
+              make clean
+              make $SD_FLAG
+            '
+
+      - name: Check the result
+        run: |
+          ls -la *.pkg
+          test -s eboot.bin
+          test "$(od -An -tx1 -N4 eboot.bin | tr -d " \n")" = "4f153d1d"
+          echo "eboot.bin is a valid SELF"
+
+      # upload-artifact zips the files, so the download is a .zip containing the PKG
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: PongBrew2-${{ inputs.resolution }}-pkg
+          path: "*.pkg"
+          if-no-files-found: error
+          retention-days: 30
