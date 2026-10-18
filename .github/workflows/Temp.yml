@@ -8,7 +8,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   download-font:
@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Download font_data.h
         run: |
@@ -30,5 +32,22 @@ jobs:
 
           test -s src/font_data.h
 
-          echo "Successfully downloaded font_data.h"
+          echo "Downloaded src/font_data.h"
           ls -lh src/font_data.h
+
+      - name: Commit and push font_data.h
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add src/font_data.h
+
+          if git diff --cached --quiet; then
+            echo "font_data.h is already up to date."
+            exit 0
+          fi
+
+          git commit -m "Update src/font_data.h from release"
+          git push
