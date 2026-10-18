@@ -137,3 +137,5 @@ and you need permission before redistributing them. Not affiliated with or endor
 ## Credits
 
 Game and code by **MexrlDev**. Built with the OpenOrbis PS4 Toolchain community tools.
+
+note: also music were ai generated. free to use anywhere
