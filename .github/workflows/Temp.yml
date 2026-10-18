@@ -1,0 +1,96 @@
+
+name: Fix Font Commit Author
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-author:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure Git
+        run: |
+          git config user.name "MexrlDev"
+          git config user.email "82407748+MexrlDev@users.noreply.github.com"
+
+      - name: Back up main on GitHub
+        run: |
+          set -euo pipefail
+
+          git fetch origin main
+
+          git branch backup-before-author-fix origin/main
+
+          git push origin \
+            backup-before-author-fix:refs/heads/backup-before-author-fix
+
+      - name: Rewrite only the bot-authored commit
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import os
+          import subprocess
+
+          commits = subprocess.check_output([
+              "git", "log", "origin/main",
+              "--format=%H%x09%an%x09%ae%x09%s"
+          ], text=True).splitlines()
+
+          matches = [
+              line.split("\t", 3)
+              for line in commits
+              if len(line.split("\t", 3)) == 4
+              and line.split("\t", 3)[1] == "github-actions[bot]"
+              and line.split("\t", 3)[3] == "Update src/font_data.h from release"
+          ]
+
+          if len(matches) != 1:
+              raise SystemExit(
+                  f"Expected exactly one matching bot commit; found {len(matches)}."
+              )
+
+          old_hash = matches[0][0]
+
+          subprocess.run([
+              "git", "replace", "--graft", old_hash,
+              *subprocess.check_output(
+                  ["git", "rev-list", "--parents", "-n", "1", old_hash],
+                  text=True
+              ).split()[1:]
+          ], check=True)
+
+          env = os.environ.copy()
+          env["FILTER_BRANCH_SQUELCH_WARNING"] = "1"
+
+          subprocess.run([
+              "git", "filter-branch", "--force",
+              "--env-filter",
+              'if [ "$GIT_COMMIT" = "' + old_hash + '" ]; then '
+              'export GIT_AUTHOR_NAME="MexrlDev"; '
+              'export GIT_AUTHOR_EMAIL="82407748+MexrlDev@users.noreply.github.com"; '
+              'export GIT_COMMITTER_NAME="MexrlDev"; '
+              'export GIT_COMMITTER_EMAIL="82407748+MexrlDev@users.noreply.github.com"; '
+              'fi',
+              "origin/main"
+          ], env=env, check=True)
+
+          new_hash = subprocess.check_output([
+              "git", "rev-parse", "refs/original/refs/remotes/origin/main"
+          ], text=True).strip()
+
+          subprocess.run([
+              "git", "push", "--force-with-lease",
+              "origin", f"{new_hash}:refs/heads/main"
+          ], check=True)
+          PY
